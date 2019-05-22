@@ -13,6 +13,10 @@ public abstract class Enemy : MonoBehaviour {
 	protected float enemyHealth;
     protected float enemyHealthMax;
     public GameObject enemyDeathObject;
+    public ExpDrop enemyEXPDrop;
+    public int enemyEXPValue;
+    private ExpDrop enemyEXPInsta;
+    private GameObject enemyAbilityEffect;
 
     //Linecasting
     //Layermask used to make the enemy ignore himself, and other enemie when raycasting
@@ -36,11 +40,13 @@ public abstract class Enemy : MonoBehaviour {
 	protected float enemyWidth;
 	protected float enemyHeight;
 	protected Animator enemyAnimator;
+    protected AudioSource enemyAudioSource;
+    protected Sounds enemySounds;
 
     //Movement
     protected Vector2 enemyStartingPosition;
     protected int enemyMovementDirection;
-	protected float enemySpeed;
+	public float enemySpeed = 2.0f;
 	protected Vector3 enemyRotation;
 
 	//Player
@@ -69,6 +75,27 @@ public abstract class Enemy : MonoBehaviour {
     protected float enemyTakeDamageTime;
     protected bool enemyHasTakenDamage;
 
+
+    //-----Effects-----//
+    //++Paralysis
+    protected bool paralyzed;
+    protected float paralyzedTimer;
+    public GameObject paralyzedSymbol;
+    protected GameObject paralyzedSymbolInsta;
+    private Vector2 paralyzedSymbolPos;
+
+    //++Bleeding
+    protected bool bleeding;
+    protected float bleedingTimer;
+    public GameObject bleedingSymbol;
+    protected GameObject bleedingSymbolInsta;
+    private Vector2 bleedingSymbolPos;
+
+
+    protected virtual void Update()
+    {
+        enemyCheckForBleeding(bleeding);
+    }
 
     //Generic movement line cast
     virtual protected void enemyMovementLineCast()
@@ -157,7 +184,7 @@ public abstract class Enemy : MonoBehaviour {
     }
 
     //Take Damage
-    public void enemyTakeDamage(int damage)
+    public virtual void enemyTakeDamage(float damage)
     {
         enemyHealth -= damage;
         enemyHPBar.fillAmount -= damage / enemyHealthMax;
@@ -168,10 +195,23 @@ public abstract class Enemy : MonoBehaviour {
             Destroy(gameObject);
         }
 
-        //If the player attacks the enemy from the back, flip
-        if(!enemyPlayerDetected)
+        //If the player attacks the enemy from the back, flip (if you're not paralyzed)
+        if(!enemyPlayerDetected && !paralyzed)
         {
-            enemyHorizontalFlip();
+            enemyHasDetectedPlayer();
+        }
+    }
+
+    //Take Damage without flipping
+    public void enemyTakeDamageFromTrap(int damage)
+    {
+        enemyHealth -= damage;
+        enemyHPBar.fillAmount -= damage / enemyHealthMax;
+        enemyHasTakenDamage = true;
+
+        if (enemyHealth <= 0.0f)
+        {
+            Destroy(gameObject);
         }
     }
 
@@ -234,12 +274,136 @@ public abstract class Enemy : MonoBehaviour {
         //Once the player is detected, stop in place and start shooting
         if (enemyPlayerDetected)
         {
-            enemyCurrentState = enemyState.Attacking;
-            enemyRigidBody.velocity = new Vector2(0.0f, 0.0f);
-            enemyAnimator.SetBool("enemyDetectedPlayer", true);
-            enemyAnimator.SetBool("enemyAttackPlayer", true);
+            enemyHasDetectedPlayer();
         }
 
+    }
+
+    //Generic. Go into attacking state once player is detected. Should be overriden if a different behavior is desired
+    protected virtual void enemyHasDetectedPlayer()
+    {
+        enemyCurrentState = enemyState.Attacking;
+        enemyRigidBody.velocity = new Vector2(0.0f, 0.0f);
+        enemyAnimator.SetBool("enemyDetectedPlayer", true);
+        enemyAnimator.SetBool("enemyAttackPlayer", true);
+    }
+
+    //Keep checking where the player's position is and accordingly change states
+    protected virtual void enemyCheckPlayerPosition()
+    {
+        if (enemyTimerToCheckPlayerPos <= 0.0f)
+        {
+            enemyPlayerPosition = enemyFindPlayer.transform.position;
+            enemyDistanceFromPlayer = enemyTransform.position - enemyPlayerPosition;
+
+            if (enemyDistanceFromPlayer.x < 0.0f && enemyMovementDirection == -1)
+            {
+                enemyHorizontalFlip();
+            }
+            else if (enemyDistanceFromPlayer.x > 0.0f && enemyMovementDirection == 1)
+            {
+                enemyHorizontalFlip();
+            }
+            //If the player is far away, go back to patrolling
+            else if (Mathf.Abs(enemyDistanceFromPlayer.x) > enemyRaycastLookForPlayerLength + 5.0f)
+            {
+                enemyCurrentState = enemyState.Patrolling;
+                enemyAnimator.SetBool("enemyDetectedPlayer", false);
+                enemyAnimator.SetBool("enemyAttackPlayer", false);
+                enemyAnimator.SetBool("enemyReloading", false);
+            }
+
+            enemyTimerToCheckPlayerPos = 0.5f;
+        }
+        else
+        {
+            enemyTimerToCheckPlayerPos -= Time.deltaTime;
+        }
+    }
+
+    //Healed
+    public void enemyHeal(float healAmount)
+    {
+        //Check if the enemy needs to be healed to begin with
+        if(enemyHealth<enemyHealthMax)
+        {
+            enemyHealth += healAmount;
+            if (enemyHealth>enemyHealthMax)
+            {
+                enemyHealth = enemyHealthMax;
+            }
+            enemyHPBar.fillAmount = enemyHealth/enemyHealthMax;
+        }
+    }
+
+    //-----Effects-----//
+
+    public virtual void enemyTakeDamageAbility(string abilityName, int damage, GameObject abilityEffect)
+    {
+        enemyTakeDamage(damage);
+        switch (abilityName)
+        {
+            case "EA":
+                paralyzed = true;
+                paralyzedSymbolPos = new Vector2(gameObject.transform.position.x, gameObject.transform.position.y + 0.8f);
+                if (paralyzedSymbolInsta == null)
+                {
+                    paralyzedSymbolInsta = Instantiate(paralyzedSymbol, paralyzedSymbolPos, gameObject.transform.rotation);
+                    paralyzedSymbolInsta.transform.parent = gameObject.transform;
+                }
+                break;
+            case "BA":
+                enemyAbilityEffect = abilityEffect;
+                break;
+            case "PA":
+                bleeding = true;
+                bleedingSymbolPos = new Vector2(gameObject.transform.position.x, gameObject.transform.position.y + 0.8f);
+                if(bleedingSymbolInsta == null)
+                {
+                    bleedingSymbolInsta = Instantiate(bleedingSymbol, bleedingSymbolPos, gameObject.transform.rotation);
+                    bleedingSymbolInsta.transform.parent = gameObject.transform;
+                }
+                break;
+        }
+    }
+
+    protected virtual bool enemyCheckForParalysis()
+    {
+        if(paralyzed)
+        {
+            if(paralyzedTimer>0.0f)
+            {
+                paralyzedTimer -= Time.deltaTime;
+            }
+            else
+            {
+                paralyzed = false;
+                paralyzedTimer = 3.5f;
+                enemyAnimator.speed = 1.0f;
+                Destroy(paralyzedSymbolInsta);
+            }
+
+        }
+
+        return paralyzed;
+    }
+
+    protected virtual void enemyCheckForBleeding(bool bleedingActive)
+    {
+        if (bleedingActive)
+        {
+            if (bleedingTimer > 0.0f)
+            {
+                bleedingTimer -= Time.deltaTime;
+                enemyTakeDamage(0.2f);
+            }
+            else
+            {
+                bleeding = false;
+                bleedingTimer = 2.0f;
+                Destroy(bleedingSymbolInsta);
+            }
+        }
     }
 
 
@@ -256,7 +420,24 @@ public abstract class Enemy : MonoBehaviour {
 
     protected void OnDestroy()
     {
+        if(paralyzedSymbolInsta)
+        {
+            Destroy(paralyzedSymbolInsta);
+        }
+        if(enemyAbilityEffect!=null)
+        {
+            if (enemyAbilityEffect.GetComponent<BAEffect>().explode())
+            {
+                //Do nothing. Basically, if a bomb is attached to you, let it explode when dying.
+                enemyAbilityEffect = null;
+            }
+        }
         Destroy(Instantiate(enemyDeathObject, gameObject.transform.position, gameObject.transform.rotation),1.0f);
+        enemyEXPInsta = Instantiate(enemyEXPDrop, gameObject.transform.position, gameObject.transform.rotation);
+        //EXP
+        enemyEXPInsta.expValue = enemyEXPValue;
+        enemyEXPInsta.playerRef = enemyFindPlayer.GetComponent<Player>();
+
     }
 
     //-------------------------------
@@ -274,6 +455,10 @@ public abstract class Enemy : MonoBehaviour {
         enemyAnimator = gameObject.GetComponent<Animator>();
         enemyWidth = enemySpriteRenderer.bounds.extents.x;
         enemyHeight = enemySpriteRenderer.bounds.extents.y;
+        enemyAudioSource = gameObject.GetComponent<AudioSource>();
+        enemySounds = GameObject.Find("AudioManager").GetComponent<Sounds>();
+
+
 
         //States
         enemyCurrentState = enemyState.Patrolling;
@@ -287,7 +472,6 @@ public abstract class Enemy : MonoBehaviour {
         {
             Debug.Log("Player was not found");
         }
-        enemySpeed = 2.0f;
         enemyDistanceFromPlayer = enemyTransform.position - enemyPlayerPosition;
         enemyActive = false;
         enemyAttackTimer = 1.0f;
@@ -318,6 +502,15 @@ public abstract class Enemy : MonoBehaviour {
         //Getting hit
         enemyTakeDamageTime = 0.15f;
         enemyHasTakenDamage = false;
+
+        //Effects
+        //++Paralysis
+        paralyzed = false;
+        paralyzedTimer = 3.5f;
+
+        //++Bleeding
+        bleeding = false;
+        bleedingTimer = 2.0f;
 
     }
 

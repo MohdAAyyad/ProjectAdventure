@@ -20,46 +20,53 @@ public class SkeletonArcher : Enemy
         archerForce = new Vector2(1200.0f,0.0f);
         enemyAttackTimer = 1.0f;
         archerReloading = false;
-        enemyHealth = enemyHealthMax = 20.0f;
+        enemyHealth = enemyHealthMax = 50.0f;
     }
 
     // Update is called once per frame
-    void Update()
+    protected override void Update()
     {
         //Debug.Log(enemyActive);
         if(enemyActive)
         {
+            base.Update();
             if (enemyHasTakenDamage)
             {
                 enemyShowDamage();
             }
 
-            //Take a breather between each shot
-            if (archerReloading)
+            if (!enemyCheckForParalysis())
             {
-                if (enemyAttackTimer > 0.0f)
+                //Take a breather between each shot
+                if (archerReloading)
                 {
-                    enemyAttackTimer -= Time.deltaTime;
+                    if (enemyAttackTimer > 0.0f)
+                    {
+                        enemyAttackTimer -= Time.deltaTime;
+                    }
+                    else
+                    {
+                        archerReloading = false;
+                        enemyAnimator.SetBool("enemyReloading", false);
+                        enemyAttackTimer = 1.0f;
+                    }
                 }
-                else
+
+                switch (enemyCurrentState)
                 {
-                    archerReloading = false;
-                    enemyAnimator.SetBool("enemyReloading", false);
-                    enemyAttackTimer = 1.0f;
+                    case enemyState.Patrolling:
+                        enemyPatrol();
+                        break;
+                    case enemyState.Attacking:
+                        archerAttack();
+                        break;
                 }
             }
-
-            switch (enemyCurrentState)
+            else
             {
-                case enemyState.Patrolling:
-                    enemyPatrol();
-                    break;
-                case enemyState.Attacking:
-                    archerAttack();
-                    break;
+                enemyAnimator.speed = 0.0f;
             }
 
-            
         }
     }
 
@@ -68,34 +75,7 @@ public class SkeletonArcher : Enemy
     private void archerAttack()
     {
         //Check for the player's position periodically
-        if (enemyTimerToCheckPlayerPos <= 0.0f)
-        {
-            enemyPlayerPosition = enemyFindPlayer.transform.position;
-            enemyDistanceFromPlayer = enemyTransform.position - enemyPlayerPosition;
-
-            if (enemyDistanceFromPlayer.x < 0.0f && enemyMovementDirection == -1)
-            {
-                enemyHorizontalFlip();
-            }
-            else if (enemyDistanceFromPlayer.x > 0.0f && enemyMovementDirection == 1)
-            {
-                enemyHorizontalFlip();
-            }
-            //If the player is far away, go back to patrolling
-            else if(Mathf.Abs(enemyDistanceFromPlayer.x) > enemyRaycastLookForPlayerLength + 5.0f)
-            {
-                enemyCurrentState = enemyState.Patrolling;
-                enemyAnimator.SetBool("enemyDetectedPlayer", false);
-                enemyAnimator.SetBool("enemyAttackPlayer", false);
-                enemyAnimator.SetBool("enemyReloading", false);
-            }
-
-            enemyTimerToCheckPlayerPos = 0.5f;
-        }
-        else
-        {
-            enemyTimerToCheckPlayerPos -= Time.deltaTime;
-        }
+        enemyCheckPlayerPosition();
     }
 
 
@@ -106,6 +86,7 @@ public class SkeletonArcher : Enemy
         {
             //Shoot an arrow and into reloading
             archerPos = new Vector2(gameObject.transform.position.x + 0.5f * enemyMovementDirection, gameObject.transform.position.y);
+            enemyAudioSource.PlayOneShot(enemySounds.skeletonBow);
             archerArrowInsta = Instantiate(archerArrow, archerPos, gameObject.transform.rotation);
             archerArrowInsta.GetComponent<Rigidbody2D>().AddForce(archerForce * enemyMovementDirection);
         }

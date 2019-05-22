@@ -87,7 +87,7 @@ public class MageBullet : MonoBehaviour
             magebulletAnimator.SetTrigger("magebulletExplode");
             magebulletCollider.enabled = false;
         }
-        else
+        else if (!(col.gameObject.tag.Equals("Shield") || col.gameObject.tag.Equals("CollectExp")))
         {
             magebulletActive = false;
             magebulletRigidBody.velocity = new Vector2(0.0f, 0.0f);

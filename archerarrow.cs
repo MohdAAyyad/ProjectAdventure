@@ -8,6 +8,7 @@ public class archerarrow : MonoBehaviour
     private Rigidbody2D archerarrowRB;
     private Collider2D archerarrowCollider;
     private float archerarrowDamage;
+    private float archerarrowPoisonTime;
     // Start is called before the first frame update
     void Start()
     {
@@ -15,6 +16,7 @@ public class archerarrow : MonoBehaviour
         archerarrowRB = gameObject.GetComponent<Rigidbody2D>();
         archerarrowCollider = gameObject.GetComponent<Collider2D>();
         archerarrowDamage = 7.0f;
+        archerarrowPoisonTime = 3.0f;
     }
 
     private void OnTriggerEnter2D(Collider2D col)
@@ -24,10 +26,10 @@ public class archerarrow : MonoBehaviour
             archerarrowRB.velocity = new Vector2(0.0f, 0.0f);
             archerarrowRB.gravityScale = 0.0f;
             archerarrowAnimator.SetTrigger("arrowExplosion");
-            col.GetComponent<Player>().playerTakeDamage(archerarrowDamage);
+            col.GetComponent<Player>().playerTakeDamageAndStatus(archerarrowDamage,"Poison", archerarrowPoisonTime);
             archerarrowCollider.enabled = false;
         }
-        else
+        else if(!(col.gameObject.tag.Equals("Shield")||col.gameObject.tag.Equals("CollectExp")))
         {
             archerarrowRB.velocity = new Vector2(0.0f, 0.0f);
             archerarrowRB.gravityScale = 0.0f;

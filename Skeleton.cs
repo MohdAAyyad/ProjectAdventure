@@ -17,54 +17,66 @@ public class Skeleton : Enemy
         enemyStart();
         enemyDamageInflicted = 7.0f;
         skeletonIsAttacking = false;
-        enemyHealth = enemyHealthMax = 20.0f;
+        enemyHealth = enemyHealthMax = 50.0f;
+        skeletonAttackSize = new Vector2(2.5f, 1.0f);
     }
 
     // Update is called once per frame
-    void Update()
+    protected override void Update()
     {
-
-        if (enemyHasTakenDamage)
+        if (enemyActive)
         {
-            enemyShowDamage();
-        }
+            base.Update();
 
-        //Take a breather between each shot
-        if (skeletonReloading)
-        {
-            //If the player moes far, break the reloading and charge if you're not already attacking
-            enemyPlayerPosition = enemyFindPlayer.transform.position;
-            enemyDistanceFromPlayer = enemyTransform.position - enemyPlayerPosition;
-
-            if (Mathf.Abs(enemyDistanceFromPlayer.x) > 2.5f && !skeletonIsAttacking)
+            if (enemyHasTakenDamage)
             {
-                skeletonIsAttacking = false;
-                skeletonReloading = false;
-                enemyAnimator.SetBool("enemyReloading", false);
-                enemyAttackTimer = 1.0f;
+                enemyShowDamage();
             }
-            //Wait a bit between each attack
-            else if (enemyAttackTimer > 0.0f)
+
+            if (!enemyCheckForParalysis())
             {
-                enemyAttackTimer -= Time.deltaTime;
+                //Take a breather between each shot
+                if (skeletonReloading)
+                {
+                    //If the player moves far, break the reloading and charge if you're not already attacking
+                    enemyPlayerPosition = enemyFindPlayer.transform.position;
+                    enemyDistanceFromPlayer = enemyTransform.position - enemyPlayerPosition;
+
+                    if (Mathf.Abs(enemyDistanceFromPlayer.x) > 2.5f && !skeletonIsAttacking)
+                    {
+                        skeletonIsAttacking = false;
+                        skeletonReloading = false;
+                        enemyAnimator.SetBool("enemyReloading", false);
+                        enemyAttackTimer = 1.0f;
+                    }
+                    //Wait a bit between each attack
+                    else if (enemyAttackTimer > 0.0f)
+                    {
+                        enemyAttackTimer -= Time.deltaTime;
+                    }
+                    else
+                    {
+                        skeletonReloading = false;
+                        enemyAnimator.SetBool("enemyReloading", false);
+                        enemyAttackTimer = 1.0f;
+                    }
+                }
+
+                //Check which state we're in
+                switch (enemyCurrentState)
+                {
+                    case enemyState.Patrolling:
+                        enemyPatrol();
+                        break;
+                    case enemyState.Attacking:
+                        skeletonAttack();
+                        break;
+                }
             }
             else
             {
-                skeletonReloading = false;
-                enemyAnimator.SetBool("enemyReloading", false);
-                enemyAttackTimer = 1.0f;
+                enemyAnimator.speed = 0.0f;
             }
-        }
-
-        //Check which state we're in
-        switch (enemyCurrentState)
-        {
-            case enemyState.Patrolling:
-                enemyPatrol();
-                break;
-            case enemyState.Attacking:
-                skeletonAttack();
-                break;
         }
 
     }
@@ -100,7 +112,6 @@ public class Skeleton : Enemy
 
 
             //See where the player is and determine if you should move towards him or start attacking immediately
-            enemyDistanceFromPlayer = enemyTransform.position - enemyPlayerPosition;
             if (Mathf.Abs(enemyDistanceFromPlayer.x) <= 2.5f && !skeletonIsAttacking)
             {
                 enemyRigidBody.velocity = new Vector2(0.0f, 0.0f);
@@ -126,9 +137,9 @@ public class Skeleton : Enemy
 
     private void skeletonSwordAttack()
     {
+        enemyAudioSource.PlayOneShot(enemySounds.skeletonSword);
         //Create an overlap box to damage the player
         skeletonAttackCenter = new Vector2(gameObject.transform.position.x + 1.0f * enemyMovementDirection, gameObject.transform.position.y);
-        skeletonAttackSize = new Vector2(2.5f, 1.0f);
         if (player = Physics2D.OverlapBox(skeletonAttackCenter, skeletonAttackSize, 0.0f, skeletonAttackMask))
         {
             player.GetComponent<Player>().playerTakeDamage(enemyDamageInflicted);
